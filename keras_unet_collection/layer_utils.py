@@ -318,30 +318,51 @@ def Sep_CONV_stack(X, channel, kernel_size=3, stack_num=1, dilation_rate=1, acti
         X = activation_func(name='{}_{}_pointwise_activation'.format(name, i))(X)
     
     return X
-  
-class ResizeLayer(Layer):
-    def __init__(self, target_shape, **kwargs):
-        super(ResizeLayer, self).__init__(**kwargs)
-        self.target_shape = target_shape
 
-    def call(self, inputs):
-        # Ridimensiona l'input alle dimensioni target, usando bilineare come metodo
-        return tf.image.resize(inputs, self.target_shape, method='bilinear', align_corners=True)
+from tensorflow.keras.layers import GlobalAveragePooling2D, Conv2D, BatchNormalization, Activation, Lambda, Resizing
+from tensorflow.keras import backend as K
+from tensorflow.keras.layers import Concatenate
 
 def ASPP_conv(X, channel, activation='ReLU', batch_norm=True, name='aspp'):
     '''
     Atrous Spatial Pyramid Pooling (ASPP).
+    
+    ASPP_conv(X, channel, activation='ReLU', batch_norm=True, name='aspp')
+    
+    ----------
+    Wang, Y., Liang, B., Ding, M. and Li, J., 2019. Dense semantic labeling 
+    with atrous spatial pyramid pooling and decoder for high-resolution remote 
+    sensing imagery. Remote Sensing, 11(1), p.20.
+    
+    Input
+    ----------
+        X: input tensor.
+        channel: number of convolution filters.
+        activation: one of the `tensorflow.keras.layers` interface, e.g., ReLU.
+        batch_norm: True for batch normalization, False otherwise.
+        name: prefix of the created keras layers.
+        
+    Output
+    ----------
+        X: output tensor.
+        
+    * dilation rates are fixed to `[6, 9, 12]`.
     '''
     
+    # Definisce la funzione di attivazione
     activation_func = eval(activation)
     bias_flag = not batch_norm
 
-    # Estrai la forma spaziale di X senza usare tf.shape
-    shape_before = X.shape[1:3]  # Ottieni solo le dimensioni spaziali
+    # Ottieni la forma dell'input
+    shape_before = K.int_shape(X)  # Utilizzo K.int_shape per ottenere la forma dinamica
 
-    # Modifica: espandi le dimensioni come prima
+    # Operazione di pooling globale
     b4 = GlobalAveragePooling2D(name='{}_avepool_b4'.format(name))(X)
-    b4 = expand_dims(expand_dims(b4, 1), 1, name='{}_expdim_b4'.format(name))
+    
+    # Espandi la dimensione per la convoluzione
+    b4 = K.expand_dims(K.expand_dims(b4, 1), 1, name='{}_expdim_b4'.format(name))
+    
+    # Convoluzione 1x1 per b4
     b4 = Conv2D(channel, 1, padding='same', use_bias=bias_flag, name='{}_conv_b4'.format(name))(b4)
     
     if batch_norm:
@@ -349,16 +370,18 @@ def ASPP_conv(X, channel, activation='ReLU', batch_norm=True, name='aspp'):
         
     b4 = activation_func(name='{}_conv_b4_activation'.format(name))(b4)
     
-    # Usa il layer ResizeLayer per ridimensionare b4
-    b4 = ResizeLayer(target_shape=shape_before)(b4)
+    # <----- Aggiornato per TensorFlow 2.x usando Resizing di Keras
+    b4 = Resizing(shape_before[1], shape_before[2], name='{}_resize_b4'.format(name))(b4)
     
+    # Convoluzione 1x1 per b0
     b0 = Conv2D(channel, (1, 1), padding='same', use_bias=bias_flag, name='{}_conv_b0'.format(name))(X)
+
     if batch_norm:
         b0 = BatchNormalization(name='{}_conv_b0_BN'.format(name))(b0)
         
     b0 = activation_func(name='{}_conv_b0_activation'.format(name))(b0)
     
-    # dilation rates are fixed to `[6, 9, 12]`.
+    # Dilation con separata convoluzione per ogni rate
     b_r6 = Sep_CONV_stack(X, channel, kernel_size=3, stack_num=1, activation='ReLU', 
                         dilation_rate=6, batch_norm=True, name='{}_sepconv_r6'.format(name))
     b_r9 = Sep_CONV_stack(X, channel, kernel_size=3, stack_num=1, activation='ReLU', 
@@ -366,7 +389,8 @@ def ASPP_conv(X, channel, activation='ReLU', batch_norm=True, name='aspp'):
     b_r12 = Sep_CONV_stack(X, channel, kernel_size=3, stack_num=1, activation='ReLU', 
                         dilation_rate=12, batch_norm=True, name='{}_sepconv_r12'.format(name))
     
-    return concatenate([b4, b0, b_r6, b_r9, b_r12])
+    # Concatenazione dei risultati
+    return Concatenate(axis=-1)([b4, b0, b_r6, b_r9, b_r12])
 
 def CONV_output(X, n_labels, kernel_size=1, activation='Softmax', name='conv_output'):
     '''
