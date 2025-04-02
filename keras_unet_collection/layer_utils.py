@@ -328,27 +328,12 @@ class ResizeLayer(Layer):
         self.target_shape = target_shape
 
     def call(self, inputs):
+        # Ridimensiona l'input alle dimensioni target, usando bilineare come metodo
         return tf.image.resize(inputs, self.target_shape, method='bilinear', align_corners=True)
 
 def ASPP_conv(X, channel, activation='ReLU', batch_norm=True, name='aspp'):
     '''
     Atrous Spatial Pyramid Pooling (ASPP).
-    
-    ASPP_conv(X, channel, activation='ReLU', batch_norm=True, name='aspp')
-    
-    Input
-    ----------
-        X: input tensor.
-        channel: number of convolution filters.
-        activation: one of the `tensorflow.keras.layers` interface, e.g., ReLU.
-        batch_norm: True for batch normalization, False otherwise.
-        name: prefix of the created keras layers.
-        
-    Output
-    ----------
-        X: output tensor.
-        
-    * dilation rates are fixed to `[6, 9, 12]`.
     '''
     
     activation_func = eval(activation)
@@ -359,9 +344,7 @@ def ASPP_conv(X, channel, activation='ReLU', batch_norm=True, name='aspp'):
 
     # Modifica: espandi le dimensioni come prima
     b4 = GlobalAveragePooling2D(name='{}_avepool_b4'.format(name))(X)
-    
     b4 = expand_dims(expand_dims(b4, 1), 1, name='{}_expdim_b4'.format(name))
-    
     b4 = Conv2D(channel, 1, padding='same', use_bias=bias_flag, name='{}_conv_b4'.format(name))(b4)
     
     if batch_norm:
@@ -369,11 +352,10 @@ def ASPP_conv(X, channel, activation='ReLU', batch_norm=True, name='aspp'):
         
     b4 = activation_func(name='{}_conv_b4_activation'.format(name))(b4)
     
-    # Invece di usare direttamente `image.resize`, usa la nuova classe ResizeLayer
+    # Usa il layer ResizeLayer per ridimensionare b4
     b4 = ResizeLayer(target_shape=shape_before)(b4)
     
     b0 = Conv2D(channel, (1, 1), padding='same', use_bias=bias_flag, name='{}_conv_b0'.format(name))(X)
-
     if batch_norm:
         b0 = BatchNormalization(name='{}_conv_b0_BN'.format(name))(b0)
         
