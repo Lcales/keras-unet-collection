@@ -359,8 +359,8 @@ def ASPP_conv(X, channel, activation='ReLU', batch_norm=True, name='aspp'):
     # Operazione di pooling globale
     b4 = GlobalAveragePooling2D(name='{}_avepool_b4'.format(name))(X)
     
-    # Espandi la dimensione per la convoluzione
-    b4 = K.expand_dims(K.expand_dims(b4, 1), 1, name='{}_expdim_b4'.format(name))
+    # Espandi la dimensione per la convoluzione usando Lambda per compatibilità Keras
+    b4 = Lambda(lambda x: K.expand_dims(K.expand_dims(x, 1), 1), name='{}_expdim_b4'.format(name))(b4)
     
     # Convoluzione 1x1 per b4
     b4 = Conv2D(channel, 1, padding='same', use_bias=bias_flag, name='{}_conv_b4'.format(name))(b4)
