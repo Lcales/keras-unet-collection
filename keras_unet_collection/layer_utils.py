@@ -348,7 +348,7 @@ def ASPP_conv(X, channel, activation='ReLU', batch_norm=True, name='aspp'):
     activation_func = eval(activation)
     bias_flag = not batch_norm
 
-    shape_before = X.get_shape().as_list()
+    shape_before = X.shape.as_list()
     b4 = GlobalAveragePooling2D(name='{}_avepool_b4'.format(name))(X)
     
     b4 = expand_dims(expand_dims(b4, 1), 1, name='{}_expdim_b4'.format(name))
