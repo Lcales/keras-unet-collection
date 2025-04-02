@@ -318,7 +318,7 @@ def Sep_CONV_stack(X, channel, kernel_size=3, stack_num=1, dilation_rate=1, acti
         X = activation_func(name='{}_{}_pointwise_activation'.format(name, i))(X)
     
     return X
-
+import tensorflow as tf
 def ASPP_conv(X, channel, activation='ReLU', batch_norm=True, name='aspp'):
     '''
     Atrous Spatial Pyramid Pooling (ASPP).
@@ -348,7 +348,7 @@ def ASPP_conv(X, channel, activation='ReLU', batch_norm=True, name='aspp'):
     activation_func = eval(activation)
     bias_flag = not batch_norm
 
-    shape_before = X.shape.as_list()
+    shape_before = tf.shape(X)
     b4 = GlobalAveragePooling2D(name='{}_avepool_b4'.format(name))(X)
     
     b4 = expand_dims(expand_dims(b4, 1), 1, name='{}_expdim_b4'.format(name))
