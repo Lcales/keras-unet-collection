@@ -320,7 +320,15 @@ def Sep_CONV_stack(X, channel, kernel_size=3, stack_num=1, dilation_rate=1, acti
     return X
   
 import tensorflow as tf
-from tensorflow.keras.layers import Lambda
+from tensorflow.keras.layers import Lambda, Layer
+
+class ResizeLayer(Layer):
+    def __init__(self, target_shape, **kwargs):
+        super(ResizeLayer, self).__init__(**kwargs)
+        self.target_shape = target_shape
+
+    def call(self, inputs):
+        return tf.image.resize(inputs, self.target_shape, method='bilinear', align_corners=True)
 
 def ASPP_conv(X, channel, activation='ReLU', batch_norm=True, name='aspp'):
     '''
@@ -347,7 +355,7 @@ def ASPP_conv(X, channel, activation='ReLU', batch_norm=True, name='aspp'):
     bias_flag = not batch_norm
 
     # Cambiato da X.shape.as_list() a tf.shape(X) per ottenere le dimensioni dinamiche
-    shape_before = tf.shape(X)
+    shape_before = tf.shape(X)[1:3]  # Ottieni solo le dimensioni spaziali
 
     # Modifica: espandi le dimensioni come prima
     b4 = GlobalAveragePooling2D(name='{}_avepool_b4'.format(name))(X)
@@ -361,9 +369,8 @@ def ASPP_conv(X, channel, activation='ReLU', batch_norm=True, name='aspp'):
         
     b4 = activation_func(name='{}_conv_b4_activation'.format(name))(b4)
     
-    # Invece di usare direttamente `image.resize`, usa `Lambda` per la logica di ridimensionamento.
-    b4 = Lambda(lambda x: tf.image.resize(x, shape_before[1:3], method='bilinear', align_corners=True), 
-                name='{}_resize_b4'.format(name))(b4)
+    # Invece di usare direttamente `image.resize`, usa la nuova classe ResizeLayer
+    b4 = ResizeLayer(target_shape=shape_before)(b4)
     
     b0 = Conv2D(channel, (1, 1), padding='same', use_bias=bias_flag, name='{}_conv_b0'.format(name))(X)
 
@@ -381,6 +388,7 @@ def ASPP_conv(X, channel, activation='ReLU', batch_norm=True, name='aspp'):
                         dilation_rate=12, batch_norm=True, name='{}_sepconv_r12'.format(name))
     
     return concatenate([b4, b0, b_r6, b_r9, b_r12])
+
 
 
 def CONV_output(X, n_labels, kernel_size=1, activation='Softmax', name='conv_output'):
